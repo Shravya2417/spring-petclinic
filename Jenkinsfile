@@ -32,15 +32,18 @@ pipeline {
     }
 
     stage('SonarQube Analysis') {
-      steps {
-        withSonarQubeEnv("${SONAR_SERVER}") {
-          withCredentials([string(credentialsId: "${SONAR_TOKEN_ID}", variable: 'SONAR_TOKEN')]) {
-            echo "🔍 Running SonarQube code analysis..."
-            sh "mvn clean verify sonar:sonar -Dsonar.projectKey=spring-petclinic -Dsonar.host.url=http://52.66.197.131:9000 -Dsonar.login=${SONAR_TOKEN}"
-          }
+    steps {
+        withSonarQubeEnv('My-Sonar') {
+            sh '''
+                mvn clean verify sonar:sonar \
+                -Dsonar.projectKey=spring-petclinic \
+                -Dsonar.host.url=http://52.66.197.131:9000 \
+                -Dsonar.login=$SONAR_TOKEN
+            '''
         }
-      }
     }
+}
+
     
     stage('Build Docker Image') {
       steps {
