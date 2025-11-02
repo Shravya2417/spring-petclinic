@@ -33,14 +33,15 @@ pipeline {
 
     stage('SonarQube Analysis') {
       steps {
-        echo "🔍 Running SonarQube code analysis..."
         withSonarQubeEnv("${SONAR_SERVER}") {
-          sh "mvn -B sonar:sonar -Dsonar.host.url=https://52.66.197.131:9000 -Dsonar.login=$SONAR_TOKEN"
-          // 🔁 REPLACE <EC2_PUBLIC_IP> with your SonarQube server IP
+          withCredentials([string(credentialsId: "${SONAR_TOKEN_ID}", variable: 'SONAR_TOKEN')]) {
+            echo "🔍 Running SonarQube code analysis..."
+            sh "mvn clean verify sonar:sonar -Dsonar.projectKey=spring-petclinic -Dsonar.host.url=http://52.66.197.131:9000 -Dsonar.login=${SONAR_TOKEN}"
+          }
         }
       }
     }
-
+    
     stage('Build Docker Image') {
       steps {
         script {
