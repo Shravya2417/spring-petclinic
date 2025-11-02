@@ -10,7 +10,7 @@ pipeline {
   }
 
   tools {
-    jdk 'jdk17'          // make sure JDK 17 is configured in Manage Jenkins → Global Tool Configuration
+    jdk 'jdk25'          // make sure JDK 17 is configured in Manage Jenkins → Global Tool Configuration
     maven 'maven3'       // same for Maven
   }
 
