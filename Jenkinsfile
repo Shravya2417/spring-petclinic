@@ -35,7 +35,7 @@ pipeline {
       steps {
         echo "🔍 Running SonarQube code analysis..."
         withSonarQubeEnv("${SONAR_SERVER}") {
-          sh "mvn -B sonar:sonar -Dsonar.host.url=https://52.66.197.131:9000 -Dsonar.login=$SONAR_TOKEN"
+          sh "mvn -B sonar:sonar -Dsonar.projectKey=spring-petclinic -Dsonar.host.url=https://52.66.197.131:9000 -Dsonar.login=$SONAR_TOKEN"
           // 🔁 REPLACE <EC2_PUBLIC_IP> with your SonarQube server IP
         }
       }
