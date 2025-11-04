@@ -1,84 +1,81 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    DOCKER_REGISTRY = "docker.io"                                // Docker Hub registry
-    DOCKER_REPO     = "shravya1207/petclinicpage1"          // 🔁 REPLACE with your Docker Hub repo name
-    SONAR_SERVER    = "My-Sonar"                                 // 🔁 REPLACE with SonarQube server name (Manage Jenkins -> System)
-    SONAR_TOKEN_ID  = "sonar-token"                              // 🔁 REPLACE with Jenkins credentials ID for SonarQube token
-    DOCKER_CRED_ID  = "docker-hub-creds"                         // 🔁 REPLACE with Jenkins credentials ID for Docker Hub
-  }
-
-  tools {
-    jdk 'jdk25'          // make sure JDK 17 is configured in Manage Jenkins → Global Tool Configuration
-    maven 'maven3'       // same for Maven
-  }
-
-  stages {
-
-    stage('Checkout') {
-      steps {
-        echo "📦 Checking out code from GitHub..."
-        checkout scm
-      }
+    environment {
+        DOCKER_REGISTRY = "docker.io"
+        DOCKER_IMAGE = "shravya1207/petclinicpage1"
+        SONAR_SERVER = "My-Sonar"
+        SONAR_TOKEN_ID = "sonar-token"
+        DOCKER_CREDS = "docker-hub-creds"
     }
 
-    stage('Build') {
-      steps {
-        echo "🔨 Building project with Maven..."
-        sh 'mvn -B -DskipTests clean package'
-        archiveArtifacts artifacts: 'target/*.jar', allowEmptyArchive: true
-      }
-    }
+    stages {
 
-    stage('SonarQube Analysis') {
-    steps {
-        withSonarQubeEnv('My-Sonar') {
-            sh '''
-                mvn clean verify sonar:sonar \
-                -Dsonar.projectKey=spring-petclinic \
-                -Dsonar.host.url=http://52.66.197.131:9000 \
-                -Dsonar.login=$SONAR_TOKEN
-            '''
+        stage('Checkout') {
+            steps {
+                echo "📦 Cloning Repository..."
+                git branch: 'main', url: 'https://github.com/Shravya2417/spring-petclinic.git'
+            }
+        }
+
+        stage('Build & Test') {
+            steps {
+                echo "🔨 Building the Project..."
+                sh "mvn clean package -DskipTests=false"
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONAR_SERVER}") {
+                    withCredentials([string(credentialsId: "${SONAR_TOKEN_ID}", variable: 'SONAR_TOKEN')]) {
+                        echo "🔍 Running SonarQube code analysis..."
+                        sh "mvn sonar:sonar -Dsonar.projectKey=spring-petclinic -Dsonar.host.url=https://35.154.173.51:9000 -Dsonar.login=${SONAR_TOKEN}"
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo "🐳 Building Docker image..."
+                script {
+                    sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} ."
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                echo "🚀 Pushing Docker image to Docker Hub..."
+                withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
+                    docker tag ${DOCKER_IMAGE}:${BUILD_NUMBER} ${DOCKER_IMAGE}:latest
+                    docker push ${DOCKER_IMAGE}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to ArgoCD') {
+            steps {
+                echo "🚀 Triggering ArgoCD Deployment..."
+                sh '''
+                argocd app sync spring-petclinic --grpc-web
+                argocd app wait spring-petclinic --timeout 300
+                '''
+            }
         }
     }
-}
 
-    
-    stage('Build Docker Image') {
-      steps {
-        script {
-          def tag = "${env.BUILD_NUMBER}"
-          echo "🐳 Building Docker image: ${DOCKER_REGISTRY}/${DOCKER_REPO}:${tag}"
-          sh "docker build -t ${DOCKER_REGISTRY}/${DOCKER_REPO}:${tag} ."
-          sh "docker tag ${DOCKER_REGISTRY}/${DOCKER_REPO}:${tag} ${DOCKER_REGISTRY}/${DOCKER_REPO}:latest"
+    post {
+        success {
+            echo "✅ Pipeline executed successfully!"
         }
-      }
-    }
-
-    stage('Push Docker Image') {
-      steps {
-        echo "📤 Pushing Docker image to Docker Hub..."
-        withCredentials([usernamePassword(credentialsId: "${DOCKER_CRED_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-          sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin ${DOCKER_REGISTRY}'
-          sh "docker push ${DOCKER_REGISTRY}/${DOCKER_REPO}:${env.BUILD_NUMBER}"
-          sh "docker push ${DOCKER_REGISTRY}/${DOCKER_REPO}:latest"
+        failure {
+            echo "❌ Pipeline failed. Please check logs."
         }
-      }
     }
-
-    stage('Update Manifests (for ArgoCD)') {
-      steps {
-        echo "📝 (Optional) Update manifests repo for ArgoCD to auto-sync new image."
-        echo "You can automate Git commit/push of updated deployment.yaml here."
-      }
-    }
-  }
-
-  post {
-    always {
-      echo "📊 Publishing test results..."
-      junit 'target/surefire-reports/*.xml'
-    }
-  }
 }
